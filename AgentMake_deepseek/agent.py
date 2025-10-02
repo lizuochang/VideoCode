@@ -19,7 +19,8 @@ class ReActAgent:
         self.model = model
         self.project_directory = project_directory
         self.client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
+            # base_url="https://openrouter.ai/api/v1",
+            base_url="https://api.deepseek.com",
             api_key=ReActAgent.get_api_key(),
         )
 
@@ -39,15 +40,33 @@ class ReActAgent:
             if thought_match:
                 thought = thought_match.group(1)
                 print(f"\n\n💭 Thought: {thought}")
+            else:
+                print(f"\n\n⚠️  Warning: Model response missing <thought> section")
+                print(f"Model response: {content}")
 
             # 检测模型是否输出 Final Answer，如果是的话，直接返回
             if "<final_answer>" in content:
                 final_answer = re.search(r"<final_answer>(.*?)</final_answer>", content, re.DOTALL)
-                return final_answer.group(1)
+                if final_answer:
+                    return final_answer.group(1)
+                else:
+                    # If the final_answer tag is present but regex fails, return the content as is
+                    return content
 
             # 检测 Action
             action_match = re.search(r"<action>(.*?)</action>", content, re.DOTALL)
             if not action_match:
+                print(f"\n\n❌ Error: Model did not output <action> as expected")
+                print(f"Model response: {content}")
+                print("\nThis might be because:")
+                print("1. The model didn't follow the required format")
+                print("2. The task was too complex or unclear")
+                print("3. The model reached a conclusion without proper formatting")
+                
+                # Try to extract any potential answer from the response
+                if "final" in content.lower() or "answer" in content.lower():
+                    return content
+                
                 raise RuntimeError("模型未输出 <action>")
             action = action_match.group(1)
             tool_name, args = self.parse_action(action)
@@ -199,9 +218,20 @@ def read_file(file_path):
 
 def write_to_file(file_path, content):
     """将指定内容写入指定文件"""
-    with open(file_path, "w", encoding="utf-8") as f:
+    # Ensure we're writing to the project directory
+    import os
+    # Get the project directory from an environment variable
+    project_dir = os.environ.get('PROJECT_DIR', os.getcwd())
+    # Always ensure the file is created within the project directory
+    # Extract just the filename to prevent directory traversal
+    filename = os.path.basename(file_path)
+    # Join the project directory with the filename
+    full_path = os.path.join(project_dir, filename)
+    # Normalize the path to handle any issues
+    full_path = os.path.normpath(full_path)
+    with open(full_path, "w", encoding="utf-8") as f:
         f.write(content.replace("\\n", "\n"))
-    return "写入成功"
+    return f"写入成功，文件路径: {full_path}"
 
 def run_terminal_command(command):
     """用于执行终端命令"""
@@ -212,13 +242,23 @@ def run_terminal_command(command):
 @click.command()
 @click.argument('project_directory',
                 type=click.Path(exists=True, file_okay=False, dir_okay=True))
-def main(project_directory):
+@click.option('--task', '-t', help='Task to execute')
+def main(project_directory, task=None):
     project_dir = os.path.abspath(project_directory)
-
+    print(project_dir)
+    # Set the project directory as an environment variable for tools to use
+    os.environ['PROJECT_DIR'] = project_dir
     tools = [read_file, write_to_file, run_terminal_command]
-    agent = ReActAgent(tools=tools, model="openai/gpt-4o", project_directory=project_dir)
 
-    task = input("请输入任务：")
+    # agent = ReActAgent(tools=tools, model="mistralai/mistral-7b-instruct:free", project_directory=project_dir)
+    agent = ReActAgent(tools=tools, model="deepseek-chat", project_directory=project_dir)
+
+    # If no task provided via option, ask user for input
+    if task is None:
+        task = input("请输入任务：")
+    else:
+        # If task provided via option, use it directly
+        task = task
 
     final_answer = agent.run(task)
 

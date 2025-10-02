@@ -35,11 +35,12 @@ react_system_prompt_template = """
 
 ⸻
 
-请严格遵守：
+重要提示：
 - 你每次回答都必须包括两个标签，第一个是 <thought>，第二个是 <action> 或 <final_answer>
 - 输出 <action> 后立即停止生成，等待真实的 <observation>，擅自生成 <observation> 将导致错误
-- 如果 <action> 中的某个工具参数有多行的话，请使用 \n 来表示，如：<action>write_to_file("/tmp/test.txt", "a\nb\nc")</action>
+- 如果 <action> 中的某个工具参数有多行的话，请使用 \\n 来表示，如：<action>write_to_file("/tmp/test.txt", "a\\nb\\nc")</action>
 - 工具参数中的文件路径请使用绝对路径，不要只给出一个文件名。比如要写 write_to_file("/tmp/test.txt", "内容")，而不是 write_to_file("test.txt", "内容")
+- 当需要在当前工作目录创建文件时，请使用提供的目录路径作为基础路径
 
 ⸻
 
@@ -51,5 +52,5 @@ ${tool_list}
 环境信息：
 
 操作系统：${operating_system}
-当前目录下文件列表：${file_list}
+当前工作目录：${file_list}
 """
